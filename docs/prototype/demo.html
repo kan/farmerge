@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FARMERGE プロトタイプ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&display=swap" rel="stylesheet">
+<style>
+/* VOICE: 静かで手触りのいい作業台。急かさない、褒めすぎない。
+   IDEA: 八百屋の軒先に並ぶ木箱。野菜を箱から箱へ移して揃える。
+   PICTURE: 8つの木箱そのものが画面の主役。最初の画面に盤面全体。
+   COLOUR and TYPE: クラフト紙の地、木箱の茶、葉の緑のボタン、選択はやわらかい黄色。Zen Maru Gothic。
+   LAYOUT: 小さな見出しと累計 → 盤面 → 操作ボタン → 図鑑の順に縦一列。 */
+:root{color-scheme:light dark;
+  --bg:light-dark(#efe4cf,#1d1914);--ink:light-dark(#2a1b14,#f1e7d6);--sub:light-dark(#6d5a48,#bba78f);
+  --crate:light-dark(#c89559,#7a5534);--slat:light-dark(#b07c44,#654429);--rim:light-dark(#8a5a2e,#4a311c);
+  --leaf:#3f8f3a;--leafd:#2e6f2b;--glow:#ffd75e;--card:light-dark(#f8f1e3,#28221b)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "Zen Maru Gothic",system-ui,sans-serif;overflow-x:clip;-webkit-tap-highlight-color:transparent}
+main{max-width:640px;margin:0 auto;padding:14px max(3vw,10px) 32px;display:flex;flex-direction:column;align-items:center;gap:12px}
+header{width:100%;display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+h1{font-size:22px;line-height:1.1;margin:0;font-weight:900}
+h1 small{display:block;font-size:13px;font-weight:500;color:var(--sub)}
+.total{text-align:right;line-height:1}
+.total b{display:block;font-size:clamp(30px,8vw,40px);font-weight:900;font-variant-numeric:tabular-nums}
+.total span{font-size:13px;color:var(--sub)}
+.total.bump b{animation:bump .3s}
+@keyframes bump{40%{transform:scale(1.15)}}
+.board{--bw:min(600px,94vw,calc((100svh - 230px)*.98));--cw:calc((var(--bw) - 42px)/8 - 8px);
+  width:var(--bw);display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px;
+  padding:10px 0 6px;border-bottom:10px solid var(--rim);border-radius:2px}
+.col{appearance:none;border:0;margin:0;padding:4px 4px 6px;font:inherit;cursor:pointer;
+  height:calc(var(--cw)*7.84 + 14px);display:flex;flex-direction:column-reverse;align-items:center;
+  background:repeating-linear-gradient(0deg,var(--crate) 0 18px,var(--slat) 18px 20px);
+  border-radius:6px 6px 3px 3px;box-shadow:inset 0 0 0 3px var(--rim),0 3px 0 rgba(0,0,0,.18);
+  position:relative;transition:box-shadow .15s,transform .15s}
+.col:focus-visible{outline:3px solid var(--leaf);outline-offset:2px}
+.col.ok{box-shadow:inset 0 0 0 3px var(--rim),0 0 0 3px var(--glow),0 3px 0 rgba(0,0,0,.18)}
+.col.sel{transform:translateY(-3px)}
+.col.merging{box-shadow:inset 0 0 0 3px var(--rim),0 0 0 4px var(--glow),0 0 18px var(--glow)}
+.coin.gather{animation:gather .3s ease-in forwards}
+@keyframes gather{to{transform:translateY(calc(var(--cw)*.76*var(--k))) scale(.55);opacity:0}}
+.coin{width:var(--cw);height:var(--cw);flex:none;display:block;filter:drop-shadow(0 2px 0 rgba(42,27,20,.25));transition:transform .12s}
+.coin+.coin{margin-bottom:calc(var(--cw)*-.24)}
+.coin.lift{transform:translateY(calc(var(--cw)*-.18))}
+.coin.pop{animation:pop .22s ease-out}
+@keyframes pop{from{transform:scale(.45);opacity:.3}}
+.count{position:absolute;top:-1px;left:0;right:0;font-size:11px;color:#fff8;text-align:center;pointer-events:none}
+.bar{display:flex;gap:8px;width:var(--bw,100%);max-width:100%;flex-wrap:wrap;justify-content:center}
+.bar button{appearance:none;border:0;border-radius:999px;font:700 16px/1 "Zen Maru Gothic",sans-serif;min-height:48px;padding:0 20px;cursor:pointer;
+  background:var(--card);color:var(--ink);box-shadow:0 3px 0 var(--rim)}
+.bar button:active{transform:translateY(2px);box-shadow:0 1px 0 var(--rim)}
+.bar button:disabled{opacity:.45;cursor:default}
+.bar #deal{background:var(--leaf);color:#fff;box-shadow:0 3px 0 var(--leafd);flex:1 1 160px;font-size:18px}
+.bar #reset.armed{background:#e8513f;color:#fff}
+.hint{min-height:1.5em;font-size:14px;color:var(--sub);text-align:center;margin:0}
+.book{width:100%;background:var(--card);border-radius:14px;padding:12px 14px}
+.book h2{font-size:15px;margin:0 0 8px}
+.book ol{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px;text-align:center}
+.book li img{width:100%;max-width:40px;display:block;margin:0 auto}
+.book li span{font-size:13px;font-variant-numeric:tabular-nums}
+.book li.arrow{grid-column:1/-1}
+.note{font-size:13px;color:var(--sub);margin:0}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>FARMERGE<small>同じ野菜を10個そろえると、次の野菜3個になる</small></h1>
+    <div class="total" id="total"><b id="merges">0</b><span>累計マージ</span></div>
+  </header>
+  <div class="board" id="board" role="group" aria-label="野菜の箱"></div>
+  <p class="hint" id="hint">箱をタップして選び、置きたい箱をタップ。同じ箱をもう一度タップでおまかせ移動。</p>
+  <div class="bar">
+    <button id="deal">補充する</button>
+    <button id="undo">戻す</button>
+    <button id="sound" aria-pressed="true">音 あり</button>
+    <button id="reset">はじめから</button>
+  </div>
+  <section class="book">
+    <h2>野菜ができた回数</h2>
+    <ol id="book"></ol>
+  </section>
+  <p class="note">デモ版。たまねぎ〜だいこんは vegtab のアイコン、とうもろこし・ブロッコリー・しいたけは仮アイコン。しいたけの次はたまねぎに戻ります。キーボード：1〜8で箱、Spaceで補充、Zで戻す。</p>
+</main>
+<script>
+{
+const COLS=8,CAP=10,MERGE_OUT=3,DEAL_N=12,RESERVE=10,GATHER=480;
+// 補充の傾斜：最大の野菜(hi)の 3つ下:2 / 2つ下:4 / 1つ下:4
+// 窓から外れて盤面に残った野菜(端数)は、ちょうど10の倍数になる数だけ優先して補充する
+const WIN_W=[2,4,4];
+function dealTable(){
+  const t=[],inWin=new Set();
+  WIN_W.forEach((w,o)=>{const tier=st.hi-3+o;if(tier>=0){t.push([tier%8,w]);inWin.add(tier%8)}});
+  if(!t.length)t.push([0,1]);inWin.add(st.hi%8);
+  return{t,inWin}}
+function orphans(inWin){
+  const cnt={};st.cols.flat().forEach(k=>{if(!inWin.has(k))cnt[k]=(cnt[k]||0)+1});
+  return Object.entries(cnt).map(([k,n])=>[+k,(CAP-n%CAP)%CAP]).filter(x=>x[1]>0)}
+function pickKind(t){let r=Math.random()*t.reduce((a,x)=>a+x[1],0);for(const[k,w]of t){if((r-=w)<0)return k}return t[0][0]}
+const S='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72" fill="none" stroke="#2a1b14" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">';
+const SVGS=[
+ S+'<path d="M35 7C35 21 10 26 9 45C8 58 20 65 36 65C52 65 64 57 63 44C62 28 41 23 35 7Z" fill="#e0a23a" /><path d="M35 23C20 43 22 55 29 60M39 25C51 43 50 54 43 60" fill="none" /><path d="M29 65L26 68M36 65V69M43 65L46 68" fill="none" /></svg>',
+ S+'<path d="M48 8C56 6 64 13 61 23C55 45 39 63 19 65C8 66 5 55 13 49C28 39 37 29 40 16Q42 9 48 8Z" fill="#5aa848" /><path d="M19 54Q42 42 51 20" fill="none" stroke="#2e7d32"/><path d="M23 45L25 47M33 34L35 36M43 23L45 25M34 50L36 52" fill="none" /></svg>',
+ S+'<path d="M48 16C58 24 59 42 47 55C35 69 13 68 9 56C5 44 22 42 27 32C31 23 35 16 48 16Z" fill="#7b4faa" /><path d="M36 12L45 17L57 15L53 24L57 31L46 29L39 35L37 25L29 22Z" fill="#2e7d32" /><path d="M45 17Q45 9 53 6" fill="none" /><path d="M17 55Q22 56 27 52" fill="none" stroke="#fffdf8"/></svg>',
+ S+'<path d="M35 20C20 13 7 24 7 40C7 57 20 65 35 64C52 66 65 55 65 40C65 24 51 14 35 20Z" fill="#e8513f" /><path d="M35 25L22 30L25 21L15 18L29 16L34 8L40 16L55 17L45 23L49 31Z" fill="#2e7d32" /><path d="M35 16Q35 10 40 6" fill="none" /><path d="M18 39Q17 33 23 30" fill="#fffdf8" stroke="#fffdf8"/></svg>',
+ S+'<path d="M33 27C23 16 17 18 14 8C27 5 33 13 35 24C31 9 38 4 42 5C48 12 41 21 39 27C47 13 56 13 61 18C57 28 46 28 40 31Z" fill="#2e7d32" /><path d="M25 29C31 24 44 25 48 32C57 48 33 62 24 67C29 56 17 40 25 29Z" fill="#fffdf8" /><path d="M24 40L32 42M28 51L35 53" fill="none" /></svg>',
+ S+'<path d="M36 7C26 7 21 24 22 40C23 54 28 62 36 62C44 62 49 54 50 40C51 24 46 7 36 7Z" fill="#f7d633" /><path d="M24 20H48M23 30H49M23 40H49M25 50H47M31 9V58M41 9V58" fill="none" stroke-width="2"/><path d="M36 67C22 65 12 53 13 36C19 46 25 50 30 53Z" fill="#5aa848" /><path d="M36 67C50 65 60 53 59 36C53 46 47 50 42 53Z" fill="#5aa848" /></svg>',
+ S+'<path d="M30 40L27 65H45L42 40Z" fill="#b9d98a" /><path d="M18 41C9 41 7 28 15 25C14 15 26 11 31 16C34 8 47 9 48 17C56 13 65 21 61 29C67 34 63 45 55 43C52 49 44 48 41 44C37 49 29 48 27 43C24 45 20 44 18 41Z" fill="#2f7d3a" /><path d="M25 29Q29 26 33 29M40 23Q44 21 47 25M47 34Q51 31 54 35M18 34Q21 32 24 35" fill="none" stroke-width="2.5"/></svg>',
+ S+'<path d="M30 38L28 62Q36 66 44 62L42 38Z" fill="#f3e3c3" /><path d="M7 40C7 22 21 11 36 11C51 11 65 22 65 40C56 45 16 45 7 40Z" fill="#8a5a3b" /><path d="M23 26L27 24M40 19L44 21M47 31L51 29M30 33L33 32" stroke="#fffdf8" stroke-width="3"/></svg>'];
+const NAMES=['たまねぎ','きゅうり','なす','トマト','だいこん','とうもろこし','ブロッコリー','しいたけ'];
+const ICON=SVGS.map(s=>'data:image/svg+xml;utf8,'+encodeURIComponent(s));
+const $=id=>document.getElementById(id);
+const boardEl=$('board'),hintEl=$('hint');
+const KEY='yasai-bako-demo-v1';
+let st,hist=[],sel=null,fresh=new Set(),pend={},nid=1,armed=0,soundOn=true,ac=null;
+
+function newState(){return{cols:Array.from({length:COLS},()=>[]),merges:0,made:Array(8).fill(0),deals:0,hi:2}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify({st,soundOn}))}catch(e){}}
+function load(){try{const o=JSON.parse(localStorage.getItem(KEY));if(o&&o.st&&o.st.cols&&o.st.cols.length===COLS){st=o.st;if(st.hi==null){st.hi=2;st.made.forEach((n,k)=>{if(n&&k>st.hi)st.hi=k})}soundOn=o.soundOn!==false;return true}}catch(e){}return false}
+const snap=()=>hist.push(JSON.stringify(st))>300&&hist.shift();
+
+const top=c=>c.length?c[c.length-1]:-1;
+function run(c){if(!c.length)return 0;const k=top(c);let n=0;for(let i=c.length-1;i>=0&&c[i]===k;i--)n++;return n}
+function canDrop(f,t){if(f===t||f==null||pend[f]||pend[t])return false;const a=st.cols[f],b=st.cols[t];return a.length>0&&b.length<CAP&&(b.length===0||top(b)===top(a))}
+function bestTarget(f){
+  let best=null,score=-1;const k=top(st.cols[f]);
+  st.cols.forEach((b,t)=>{if(!canDrop(f,t))return;
+    const s=b.length?100+run(b):(st.cols[f].length===run(st.cols[f])?-2:1);
+    if(s>score){score=s;best=t}});
+  return score<0?null:best}
+function anyMove(){for(let f=0;f<COLS;f++)for(let t=0;t<COLS;t++)if(canDrop(f,t))return true;return false}
+
+function move(f,t){
+  snap();const a=st.cols[f],b=st.cols[t];
+  const n=Math.min(run(a),CAP-b.length);
+  for(let i=0;i<n;i++)b.push(a.pop());
+  tone(0,'place');sel=null;say('');merge();commit()}
+const full=c=>c.length===CAP&&c.every(k=>k===c[0]);
+function merge(){
+  st.cols.forEach((c,i)=>{
+    if(pend[i]||!full(c))return;
+    pend[i]={t0:performance.now(),timer:setTimeout(()=>finish(i),GATHER)};
+    tone(c[0],'gather')})}
+function finish(i){
+  delete pend[i];const c=st.cols[i];
+  if(!full(c)){render();return}
+  const nk=(c[0]+1)%8;c.length=0;
+  for(let j=0;j<MERGE_OUT;j++)c.push(nk);
+  st.merges++;st.made[nk]++;if(nk===(st.hi+1)%8)st.hi++;
+  for(let j=0;j<MERGE_OUT;j++)fresh.add(i+':'+j);
+  tone(nk,'merge');try{navigator.vibrate&&navigator.vibrate(12)}catch(e){}
+  const t=$('total');t.classList.remove('bump');void t.offsetWidth;t.classList.add('bump');
+  save();render();say(`${NAMES[(nk+7)%8]}が10個そろって、${NAMES[nk]}になりました`)}
+function clearPend(){for(const i in pend)clearTimeout(pend[i].timer);pend={}}
+function deal(){
+  const free=st.cols.reduce((s,c)=>s+CAP-c.length,0);
+  let n=Math.min(DEAL_N,free-RESERVE);
+  if(n<=0){say('箱がいっぱいです。そろえて空きを作りましょう');return}
+  snap();sel=null;st.deals++;
+  const {t:tbl,inWin}=dealTable();
+  const put=(i,k)=>{st.cols[i].push(k);fresh.add(i+':'+(st.cols[i].length-1));n--};
+  // 端数の始末：同じ野菜が上にある箱へ優先して積む
+  for(const[k,need]of orphans(inWin)){
+    let left=Math.min(need,n);
+    const dst=st.cols.map((c,i)=>i).filter(i=>st.cols[i].length<CAP).sort((a,b)=>(top(st.cols[b])===k?run(st.cols[b]):-1)-(top(st.cols[a])===k?run(st.cols[a]):-1));
+    for(const i of dst){while(left>0&&st.cols[i].length<CAP){put(i,k);left--}if(!left)break}}
+  // 空きのある列をシャッフルして順番に1〜2個ずつ配る（列ごとの偏りを減らす）
+  const order=st.cols.map((c,i)=>i).filter(i=>st.cols[i].length<CAP).sort(()=>Math.random()-.5);
+  let p=0,guard=0;
+  while(n>0&&guard++<200){
+    const i=order[p++%order.length],c=st.cols[i];
+    if(c.length>=CAP)continue;
+    const k=pickKind(tbl.length?tbl:[[0,1]]);
+    const len=Math.min(1+Math.floor(Math.random()*2),n,CAP-c.length);
+    for(let j=0;j<len;j++){c.push(k);fresh.add(i+':'+(c.length-1))}
+    n-=len}
+  tone(1,'deal');merge();commit()}
+
+function commit(){save();render();
+  if(!anyMove()&&st.cols.reduce((s,c)=>s+CAP-c.length,0)<=RESERVE)say('動かせる野菜がありません。「戻す」で前の状態に戻れます');}
+function say(t){hintEl.textContent=t}
+
+function tap(i){
+  initAudio();if(pend[i])return;const c=st.cols[i];
+  if(sel==null){if(c.length){sel=i;tone(top(c),'pick')}}
+  else if(sel===i){const t=bestTarget(i);if(t!=null){move(i,t);return}sel=null}
+  else if(canDrop(sel,i)){move(sel,i);return}
+  else sel=c.length?i:null;
+  render()}
+
+function render(){
+  const now=performance.now();
+  boardEl.innerHTML=st.cols.map((c,i)=>{
+    const r=sel===i?run(c):0,pd=pend[i];
+    const cls=['col',sel===i?'sel':'',canDrop(sel,i)?'ok':'',pd?'merging':''].join(' ');
+    const coins=c.map((k,j)=>{
+      let cl='coin',sty='';
+      if(pd){cl+=' gather';sty=`style="--k:${j-1};animation-delay:${Math.round((CAP-1-j)*20-(now-pd.t0))}ms"`}
+      else{if(j>=c.length-r)cl+=' lift';if(fresh.has(i+':'+j))cl+=' pop'}
+      return `<img class="${cl}" ${sty} src="${ICON[k]}" alt="">`}).join('');
+    const label=`${i+1}番の箱 ${c.length?NAMES[top(c)]+'が一番上、'+c.length+'個':'空'}`;
+    return `<button class="${cls}" data-i="${i}" aria-label="${label}">${coins}</button>`}).join('');
+  fresh.clear();
+  $('merges').textContent=st.merges.toLocaleString();
+  $('book').innerHTML=NAMES.map((n,k)=>`<li title="${n}"><img src="${ICON[k]}" alt="${n}"><span>${st.made[k]}</span></li>`).join('');
+  $('undo').disabled=!hist.length;
+  $('sound').textContent=soundOn?'音 あり':'音 なし';$('sound').setAttribute('aria-pressed',soundOn);
+  if(sel!=null)say(`${NAMES[top(st.cols[sel])]}を${run(st.cols[sel])}個選択中。光っている箱に置けます`);
+}
+
+function initAudio(){if(ac||!soundOn)return;try{ac=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}}
+const SCALE=[0,2,4,7,9,12,14,16];
+function tone(k,kind){
+  if(!soundOn||!ac)return;
+  const play=(f,t0,d,g,type)=>{const o=ac.createOscillator(),v=ac.createGain();o.type=type;o.frequency.value=f;
+    v.gain.setValueAtTime(0,ac.currentTime+t0);v.gain.linearRampToValueAtTime(g,ac.currentTime+t0+.008);
+    v.gain.exponentialRampToValueAtTime(.0001,ac.currentTime+t0+d);o.connect(v).connect(ac.destination);o.start(ac.currentTime+t0);o.stop(ac.currentTime+t0+d+.02)};
+  const f=523.25*2**(SCALE[k]/12);
+  if(kind==='place')play(660,0,.06,.06,'triangle');
+  else if(kind==='pick')play(f,0,.05,.04,'sine');
+  else if(kind==='gather'){const o=ac.createOscillator(),v=ac.createGain();o.type='sine';o.frequency.setValueAtTime(f/2,ac.currentTime);o.frequency.exponentialRampToValueAtTime(f,ac.currentTime+.42);v.gain.setValueAtTime(.0001,ac.currentTime);v.gain.linearRampToValueAtTime(.05,ac.currentTime+.3);v.gain.exponentialRampToValueAtTime(.0001,ac.currentTime+.45);o.connect(v).connect(ac.destination);o.start();o.stop(ac.currentTime+.5)}
+  else if(kind==='deal'){for(let j=0;j<4;j++)play(500+j*70,j*.045,.05,.04,'triangle')}
+  else{play(f,0,.18,.12,'sine');play(f*1.5,.07,.22,.08,'sine');play(f*2,.14,.3,.06,'sine')}
+}
+
+boardEl.addEventListener('click',e=>{const b=e.target.closest('.col');if(b)tap(+b.dataset.i)});
+$('deal').addEventListener('click',()=>{initAudio();deal()});
+$('undo').addEventListener('click',()=>{if(!hist.length)return;clearPend();st=JSON.parse(hist.pop());sel=null;save();render();merge();say('ひとつ戻しました')});
+$('sound').addEventListener('click',()=>{soundOn=!soundOn;if(soundOn)initAudio();save();render()});
+$('reset').addEventListener('click',e=>{
+  const b=e.currentTarget;
+  if(!armed){b.classList.add('armed');b.textContent='もう一度で消去';armed=setTimeout(()=>{armed=0;b.classList.remove('armed');b.textContent='はじめから'},2500);return}
+  clearTimeout(armed);armed=0;b.classList.remove('armed');b.textContent='はじめから';
+  start(true)});
+document.addEventListener('keydown',e=>{
+  if(e.target.closest&&e.target.closest('input,textarea'))return;
+  if(e.key>='1'&&e.key<='8'){tap(+e.key-1)}
+  else if(e.key===' '){e.preventDefault();initAudio();deal()}
+  else if(e.key==='z'||e.key==='Z'){$('undo').click()}
+  else if(e.key==='Escape'){sel=null;render()}});
+
+function start(reset){
+  clearPend();
+  if(reset||!load()){st=newState();hist=[];const s=soundOn;soundOn=false;deal();deal();deal();soundOn=s;hist=[];st.deals=0}
+  sel=null;save();merge();render();say('箱をタップして選び、置きたい箱をタップ。同じ箱をもう一度タップでおまかせ移動。')}
+start(false);
+}
+</script>
+</body>
+</html>
